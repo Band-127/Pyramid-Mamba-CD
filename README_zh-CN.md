@@ -75,7 +75,7 @@ conda activate changemamba
 
 ```bash
 pip install -r requirements.txt
-cd kernels/selective_scan && pip install .
+cd kernels/selective_scan && python -m pip install .
 ```
 
 

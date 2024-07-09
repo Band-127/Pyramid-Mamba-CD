@@ -1,5 +1,7 @@
 import sys
-sys.path.append('/home/songjian/project/MambaCD')
+sys.path.append('/home/majiancong/')
+# sys.path.append('/home/majiancong/.local/lib/python3.10/site-packages')
+# /home/majiancong/.local/lib/python3.10
 
 import argparse
 import os
@@ -170,14 +172,14 @@ def main():
     parser.add_argument('--dataset', type=str, default='SYSU')
     parser.add_argument('--type', type=str, default='train')
     parser.add_argument('--train_dataset_path', type=str, default='/home/songjian/project/datasets/SYSU/train')
-    parser.add_argument('--train_data_list_path', type=str, default='/home/songjian/project/datasets/SYSU/train_list.txt')
+    # parser.add_argument('--train_data_list_path', type=str, default='/home/songjian/project/datasets/SYSU/train_list.txt')
     parser.add_argument('--test_dataset_path', type=str, default='/home/songjian/project/datasets/SYSU/test')
-    parser.add_argument('--test_data_list_path', type=str, default='/home/songjian/project/datasets/SYSU/test_list.txt')
+    # parser.add_argument('--test_data_list_path', type=str, default='/home/songjian/project/datasets/SYSU/test_list.txt')
     parser.add_argument('--shuffle', type=bool, default=True)
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--crop_size', type=int, default=256)
-    parser.add_argument('--train_data_name_list', type=list)
-    parser.add_argument('--test_data_name_list', type=list)
+    # parser.add_argument('--train_data_name_list', type=list)
+    # parser.add_argument('--test_data_name_list', type=list)
     parser.add_argument('--start_iter', type=int, default=0)
     parser.add_argument('--cuda', type=bool, default=True)
     parser.add_argument('--max_iters', type=int, default=240000)
@@ -190,14 +192,15 @@ def main():
     parser.add_argument('--weight_decay', type=float, default=5e-4)
 
     args = parser.parse_args()
-    with open(args.train_data_list_path, "r") as f:
+    # with open(args.train_dataset_path, "r") as f:
         # data_name_list = f.read()
-        data_name_list = [data_name.strip() for data_name in f]
-    args.train_data_name_list = data_name_list
-
-    with open(args.test_data_list_path, "r") as f:
-        # data_name_list = f.read()
-        test_data_name_list = [data_name.strip() for data_name in f]
+    train_data_name_list=os.listdir(args.train_dataset_path)
+    # data_name_list = [data_name.strip() for data_name in f]
+    args.train_data_name_list = train_data_name_list
+    test_data_name_list=os.listdir(args.test_dataset_path)
+    # with open(args.test_data_list_path, "r") as f:
+    #     # data_name_list = f.read()
+    #     test_data_name_list = [data_name.strip() for data_name in f]
     args.test_data_name_list = test_data_name_list
 
     trainer = Trainer(args)

@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/songjian/project/MambaCD')
+sys.path.append('/home/majiancong/MambaCD')
 
 import argparse
 import os

@@ -55,9 +55,14 @@ class ChangeDetectionDatset(Dataset):
         return pre_img, post_img, label
 
     def __getitem__(self, index):
-        pre_path = os.path.join(self.dataset_path, 'T1', self.data_list[index])
-        post_path = os.path.join(self.dataset_path, 'T2', self.data_list[index])
-        label_path = os.path.join(self.dataset_path, 'GT', self.data_list[index])
+        # print(self.dataset_path)
+        if 'train' in self.data_pro_type:
+            self.dataset_path='/home/majiancong/data/LEVIR-CD/train'
+        else:
+            self.dataset_path='/home/majiancong/data/LEVIR-CD/test'
+        pre_path = os.path.join(self.dataset_path, 'A', self.data_list[index])
+        post_path = os.path.join(self.dataset_path,'B', self.data_list[index])
+        label_path = os.path.join(self.dataset_path, 'label', self.data_list[index])
         pre_img = self.loader(pre_path)
         post_img = self.loader(post_path)
         label = self.loader(label_path)
@@ -207,7 +212,7 @@ class DamageAssessmentDatset(Dataset):
 
 
 def make_data_loader(args, **kwargs):  # **kwargs could be omitted
-    if 'SYSU' in args.dataset or 'LEVIR-CD+' in args.dataset or 'WHU' in args.dataset:
+    if 'SYSU' in args.dataset or 'LEVIR-CD+' in args.dataset or 'WHU' in args.dataset or 'LEVIR-CD' in args.dataset:
         dataset = ChangeDetectionDatset(args.train_dataset_path, args.train_data_name_list, args.crop_size, args.max_iters, args.type)
         # train_sampler = DistributedSampler(dataset, shuffle=True)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, **kwargs, num_workers=16,
