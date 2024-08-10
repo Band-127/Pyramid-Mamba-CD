@@ -2,7 +2,7 @@ import sys
 sys.path.append('/home/majiancong/')
 # sys.path.append('/home/majiancong/.local/lib/python3.10/site-packages')
 # /home/majiancong/.local/lib/python3.10
-
+print(sys.path)
 import argparse
 import os
 import time
@@ -62,12 +62,13 @@ class Trainer(object):
             gmlp=config.MODEL.VSSM.GMLP,
             use_checkpoint=config.TRAIN.USE_CHECKPOINT,
             ) 
+        # print(self.deep_model)
         self.deep_model = self.deep_model.cuda()
         self.model_save_path = os.path.join(args.model_param_path, args.dataset,
                                             args.model_type + '_' + str(time.time()))
         self.lr = args.learning_rate
         self.epoch = args.max_iters // args.batch_size
-
+        torch.random.manual_seed(3407)
         if not os.path.exists(self.model_save_path):
             os.makedirs(self.model_save_path)
 
@@ -122,6 +123,7 @@ class Trainer(object):
                                    os.path.join(self.model_save_path, f'{itera + 1}_model.pth'))
                         best_kc = kc
                         best_round = [rec, pre, oa, f1_score, iou, kc]
+                    print('best round:',best_round)
                     self.deep_model.train()
 
         print('The accuracy of the best round is ', best_round)
@@ -135,13 +137,11 @@ class Trainer(object):
         
         with torch.no_grad():
             for itera, data in enumerate(val_data_loader):
-                pre_change_imgs, post_change_imgs, labels, _ = data
+                pre_change_imgs, post_change_imgs, labels, _ = data             
                 pre_change_imgs = pre_change_imgs.cuda().float()
-                post_change_imgs = post_change_imgs.cuda()
+                post_change_imgs = post_change_imgs.cuda().float()
                 labels = labels.cuda().long()
-
                 output_1 = self.deep_model(pre_change_imgs, post_change_imgs)
-
                 output_1 = output_1.data.cpu().numpy()
                 output_1 = np.argmax(output_1, axis=1)
                 labels = labels.cpu().numpy()
@@ -160,7 +160,7 @@ class Trainer(object):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Training on SYSU/LEVIR-CD+/WHU-CD dataset")
+    parser = argparse.ArgumentParser(description="Training on SYSU/LEVIR-CD+/LEVIR-CD/WHU-CD dataset")
     parser.add_argument('--cfg', type=str, default='/home/songjian/project/MambaCD/VMamba/classification/configs/vssm1/vssm_base_224.yaml')
     parser.add_argument(
         "--opts",
@@ -189,19 +189,14 @@ def main():
     parser.add_argument('--resume', type=str)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--momentum', type=float, default=0.9)
-    parser.add_argument('--weight_decay', type=float, default=5e-4)
+    parser.add_argument('--weight_decay', type=float, default=4e-4)
 
     args = parser.parse_args()
-    # with open(args.train_dataset_path, "r") as f:
-        # data_name_list = f.read()
-    train_data_name_list=os.listdir(args.train_dataset_path)
-    # data_name_list = [data_name.strip() for data_name in f]
-    args.train_data_name_list = train_data_name_list
-    test_data_name_list=os.listdir(args.test_dataset_path)
-    # with open(args.test_data_list_path, "r") as f:
-    #     # data_name_list = f.read()
-    #     test_data_name_list = [data_name.strip() for data_name in f]
-    args.test_data_name_list = test_data_name_list
+
+    if args.dataset=='LEVIR-CD':
+        args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'A'))
+        args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'A'))
+   
 
     trainer = Trainer(args)
     trainer.training()

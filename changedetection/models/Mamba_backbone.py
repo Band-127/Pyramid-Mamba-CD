@@ -43,7 +43,8 @@ class Backbone_VSSM(VSSM):
             x = l.blocks(x)
             y = l.downsample(x)
             return x, y
-
+        # import pdb
+        # pdb.set_trace()
         x = self.patch_embed(x)
         outs = []
         for i, layer in enumerate(self.layers):
@@ -54,7 +55,8 @@ class Backbone_VSSM(VSSM):
                 if not self.channel_first:
                     out = out.permute(0, 3, 1, 2).contiguous()
                 outs.append(out)
-
+        # import pdb
+        # pdb.set_trace()
         if len(self.out_indices) == 0:
             return x
         

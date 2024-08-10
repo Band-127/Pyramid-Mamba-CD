@@ -1,6 +1,4 @@
 # global
-**/__pycache__
-**/_ignore
 **/.dist_test
 **/.pytest_cache
 **/*.egg-info
@@ -21,7 +19,12 @@ analyze/show
 cross_selective_scan
 
 classification/models/pscan.py
-
+changedetection/vssm_base_0229_ckpt_epoch_237.pth
+changedetection/vssm_small_0229_ckpt_epoch_222.pth
+changedetection/vssm_tiny_0230_ckpt_epoch_262.pth
+changedetection/changedetection/
+kernels/cross_scan/build
+kernels/selective_scan/build
 # we do not release code of heat series
 classification/configs/heat
 classification/models/heat
@@ -35,10 +38,9 @@ detection/work_dirs
 segmentation/data
 segmentation/work_dirs
 
-kernels/cross_scan/build
-kernels/selective_scan/build
 
-classification/configs/vssm1/_test_vssm_tiny_224_0221.yaml
+
+
 
 classification/models/ss2d_ablations.py
 kernels/selective_scan/1.log

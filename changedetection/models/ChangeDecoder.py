@@ -2,248 +2,160 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from MambaCD.classification.models.vmamba import VSSM, LayerNorm2d, VSSBlock, Permute
+import einops
 
 
 class ChangeDecoder(nn.Module):
-    def __init__(self, encoder_dims, channel_first, norm_layer, ssm_act_layer, mlp_act_layer, **kwargs):
+    def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, **kwargs):
         super(ChangeDecoder, self).__init__()
+        self.embeding_dim=[encoder_dims[i] for i in range(len(encoder_dims))]
+        # self.embeding_dim.append(self.embeding_dim[-1]*2)
+        # encoder_dims.append(self.embeding_dim[-1]*2)
+        # encoder_dims.append(encoder_dims[-1]*2)
+        
+        self.shape=[64,32,16,8]
+        # 96 192 384 768
+        self.conv_list = []
+        for i in range(1,len(self.embeding_dim)):
+            if not use_3x3:
+                self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
+                                                nn.GroupNorm(32,encoder_dims[1])))
+            else:
+                if i == len(self.embeding_dim)-1:
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
+                                                nn.GroupNorm(32,encoder_dims[1])))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(encoder_dims[i], encoder_dims[1], kernel_size=3, stride=2, padding=1),  # 3x3conv s=2 -> 256channel
+                    nn.GroupNorm(32, encoder_dims[1])))
+                else:
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
+                                              nn.GroupNorm(32,encoder_dims[1])))
+        for convnet in self.conv_list:
+            convnet.to('cuda')
+        self.lvl_embed = nn.Parameter(torch.rand(4,1,encoder_dims[1]))
+        # 4 192
+        self.depth = 8
+        self.model_list=[nn.Sequential(
+            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
+            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
+            VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity())]
+        self.model_list.append(nn.Sequential(
+            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
+            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
+            VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity()))
+        self.vss = nn.ModuleList(self.model_list)
+        self.upsample = nn.Upsample(scale_factor=2,mode='bilinear')
+        self.concat_layer=upsample_block()
+        self.smooth_layer = [ResBlock(in_channels=encoder_dims[1], out_channels=encoder_dims[1], stride=1).to('cuda') for _ in range(self.depth+1)]
+        self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * encoder_dims[1],out_channels = encoder_dims[1])
+        self.apply(self.parameter_init)
 
-        # Define the VSS Block for Spatio-temporal relationship modelling
-        self.st_block_41 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-1] * 2, out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_42 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-1], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-
-        )
-        self.st_block_43 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-1], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        self.st_block_31 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-2] * 2, out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_32 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-2], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_33 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-2], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        self.st_block_21 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3] * 2, out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_22 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_23 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-3], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        self.st_block_11 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-4] * 2, out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_12 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-4], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-        self.st_block_13 = nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[-4], out_channels=128),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=128, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),
-            Permute(0, 3, 1, 2) if not channel_first else nn.Identity(),
-        )
-
-        # Fuse layer  
-        self.fuse_layer_4 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
-                                          nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_3 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
-                                          nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_2 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
-                                          nn.BatchNorm2d(128), nn.ReLU())
-        self.fuse_layer_1 = nn.Sequential(nn.Conv2d(kernel_size=1, in_channels=128 * 5, out_channels=128),
-                                          nn.BatchNorm2d(128), nn.ReLU())
-
-        # Smooth layer
-        self.smooth_layer_3 = ResBlock(in_channels=128, out_channels=128, stride=1) 
-        self.smooth_layer_2 = ResBlock(in_channels=128, out_channels=128, stride=1) 
-        self.smooth_layer_1 = ResBlock(in_channels=128, out_channels=128, stride=1) 
+    def align_and_cat(self,pre_level_f):
+        bs,c,w,h=pre_level_f.shape
+        pre_level=pre_level_f.reshape(bs,c//2,w,h*2)
+        return pre_level
     
-    def _upsample_add(self, x, y):
-        _, _, H, W = y.size()
-        return F.interpolate(x, size=(H, W), mode='bilinear') + y
+    def channel_mapper_and_cat(self,feature):
+        bs,c, __ , __ = feature[1].shape
+        # print(feature[0].shape)
+        output=[]
+        # feature[0]=feature[0].reshape(bs,c,-1)
+        length=len(feature) #4
+        # import pdb
+        # pdb.set_trace()
+        for i in range(1,length):
+            if i==length-1:
+                output.append((self.conv_list[i-1](feature[i])).reshape(bs,c,-1))
+                output.append((self.conv_list[i](feature[i])).reshape(bs,c,-1))
+                # feature[i]=(self.conv_list[i](feature[i])).reshape(bs,c,-1)
+                # feature_tmp=(self.conv_list[i](feature[i])).reshape(bs,c,-1)
+            else:
+                output.append((self.conv_list[i-1](feature[i])).reshape(bs,c,-1))
+            # print(feature[i+1].shape)
 
-    def forward(self, pre_features, post_features):
+        # import pdb
+        # pdb.set_trace()
+        for lvl,encoding_f in enumerate(output):
+            encoding_f += self.lvl_embed[lvl].view(1,-1,1)
+        return torch.cat([output[i] for i in range(4)],dim=2)
+    def batch_split_and_smooth(self,features,index,name,w):
+        bs,c,__, l = features.shape
+        
+        assert l == w*w*(1+1/4+1/16+1/64)
+        max_shape=int(w*w)
+        shape_list = [max_shape,max_shape//4,max_shape//16,max_shape//64]
+        feature_0,feature_1,feature_2,feature_3= features[:,:,:,:shape_list[0]],features[:,:,:,shape_list[0]:shape_list[0]+shape_list[1]],features[:,:,:,shape_list[0]+shape_list[1]:+shape_list[2]+shape_list[0]+shape_list[1]],features[:,:,:,shape_list[2]+shape_list[0]+shape_list[1]:]
+        feature_0 = self.smooth_layer[index](feature_0.reshape(bs,c,shape_list[0],-1))
+        feature_1 = self.smooth_layer[index](feature_1.reshape(bs,c,shape_list[1],-1))
+        feature_2 = self.smooth_layer[index](feature_2.reshape(bs,c,shape_list[2],-1))
+        # import pdb
+        # pdb.set_trace()
+        feature_3 = self.smooth_layer[index](feature_3.reshape(bs,c,shape_list[3],-1))
+        if name=='mid':
+            feature = [feature_0,feature_1,feature_2,feature_3]
+            for index in range(len(feature)):
+                feature[index] = feature[index].reshape(bs,c,1,-1)
+            return torch.cat(feature,dim=-1)
+        else:
+            return [feature_0,feature_1,feature_2,feature_3]
+    
+    def parameter_init(self,module):
+        if isinstance(module, nn.Conv2d):
+        # He 初始化 (Kaiming 初始化)
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
 
-        pre_feat_1, pre_feat_2, pre_feat_3, pre_feat_4 = pre_features
-
-        post_feat_1, post_feat_2, post_feat_3, post_feat_4 = post_features
-
-        '''
-            Stage I
-        '''
-        p41 = self.st_block_41(torch.cat([pre_feat_4, post_feat_4], dim=1))
-        B, C, H, W = pre_feat_4.size()
-        # Create an empty tensor of the correct shape (B, C, H, 2*W)
-        ct_tensor_42 = torch.empty(B, C, H, 2*W).cuda()
-        # Fill in odd columns with A and even columns with B
-        ct_tensor_42[:, :, :, ::2] = pre_feat_4  # Odd columns
-        ct_tensor_42[:, :, :, 1::2] = post_feat_4  # Even columns
-        p42 = self.st_block_42(ct_tensor_42)
-
-        ct_tensor_43 = torch.empty(B, C, H, 2*W).cuda()
-        ct_tensor_43[:, :, :, 0:W] = pre_feat_4
-        ct_tensor_43[:, :, :, W:] = post_feat_4
-        p43 = self.st_block_43(ct_tensor_43)
-
-        p4 = self.fuse_layer_4(torch.cat([p41, p42[:, :, :, ::2], p42[:, :, :, 1::2], p43[:, :, :, 0:W], p43[:, :, :, W:]], dim=1))
-       
-
-        '''
-            Stage II
-        '''
-        p31 = self.st_block_31(torch.cat([pre_feat_3, post_feat_3], dim=1))
-        B, C, H, W = pre_feat_3.size()
-        # Create an empty tensor of the correct shape (B, C, H, 2*W)
-        ct_tensor_32 = torch.empty(B, C, H, 2*W).cuda()
-        # Fill in odd columns with A and even columns with B
-        ct_tensor_32[:, :, :, ::2] = pre_feat_3  # Odd columns
-        ct_tensor_32[:, :, :, 1::2] = post_feat_3  # Even columns
-        p32 = self.st_block_32(ct_tensor_32)
-
-        ct_tensor_33 = torch.empty(B, C, H, 2*W).cuda()
-        ct_tensor_33[:, :, :, 0:W] = pre_feat_3
-        ct_tensor_33[:, :, :, W:] = post_feat_3
-        p33 = self.st_block_33(ct_tensor_33)
-
-        p3 = self.fuse_layer_3(torch.cat([p31, p32[:, :, :, ::2], p32[:, :, :, 1::2], p33[:, :, :, 0:W], p33[:, :, :, W:]], dim=1))
-        p3 = self._upsample_add(p4, p3)
-        p3 = self.smooth_layer_3(p3)
-       
-        '''
-            Stage III
-        '''
-        p21 = self.st_block_21(torch.cat([pre_feat_2, post_feat_2], dim=1))
-        B, C, H, W = pre_feat_2.size()
-        # Create an empty tensor of the correct shape (B, C, H, 2*W)
-        ct_tensor_22 = torch.empty(B, C, H, 2*W).cuda()
-        # Fill in odd columns with A and even columns with B
-        ct_tensor_22[:, :, :, ::2] = pre_feat_2  # Odd columns
-        ct_tensor_22[:, :, :, 1::2] = post_feat_2  # Even columns
-        p22 = self.st_block_22(ct_tensor_22)
-
-        ct_tensor_23 = torch.empty(B, C, H, 2*W).cuda()
-        ct_tensor_23[:, :, :, 0:W] = pre_feat_2
-        ct_tensor_23[:, :, :, W:] = post_feat_2
-        p23 = self.st_block_23(ct_tensor_23)
-
-        p2 = self.fuse_layer_2(torch.cat([p21, p22[:, :, :, ::2], p22[:, :, :, 1::2], p23[:, :, :, 0:W], p23[:, :, :, W:]], dim=1))
-        p2 = self._upsample_add(p3, p2)
-        p2 = self.smooth_layer_2(p2)
-       
-        '''
-            Stage IV
-        '''
-        p11 = self.st_block_11(torch.cat([pre_feat_1, post_feat_1], dim=1))
-        B, C, H, W = pre_feat_1.size()
-        # Create an empty tensor of the correct shape (B, C, H, 2*W)
-        ct_tensor_12 = torch.empty(B, C, H, 2*W).cuda()
-        # Fill in odd columns with A and even columns with B
-        ct_tensor_12[:, :, :, ::2] = pre_feat_1  # Odd columns
-        ct_tensor_12[:, :, :, 1::2] = post_feat_1  # Even columns
-        p12 = self.st_block_12(ct_tensor_12)
-
-        ct_tensor_13 = torch.empty(B, C, H, 2*W).cuda()
-        ct_tensor_13[:, :, :, 0:W] = pre_feat_1
-        ct_tensor_13[:, :, :, W:] = post_feat_1
-        p13 = self.st_block_13(ct_tensor_13)
-
-        p1 = self.fuse_layer_1(torch.cat([p11, p12[:, :, :, ::2], p12[:, :, :, 1::2], p13[:, :, :, 0:W], p13[:, :, :, W:]], dim=1))
-
-        p1 = self._upsample_add(p2, p1)
-        p1 = self.smooth_layer_1(p1)
-
-        return p1
+    def forward(self, features):
+        bs,c,w,h  = features[1].shape
+        # w1,w2,w3,w4 = w,w//2,w//4,w//8
+        features_mapper = self.channel_mapper_and_cat(features)
+        # print(features.shape)
+        # import pdb
+        # pdb.set_trace()
+        features_mapper = features_mapper.unsqueeze(-2)
+        
+        # pre_feat_1, pre_feat_2, pre_feat_3, pre_feat_4 = features_mapper
+        for blk_index in range(len(self.vss)):
+            features_mapper = self.batch_split_and_smooth(self.vss[blk_index](features_mapper),name='mid',w=w,index=blk_index)
+        feature_final = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index,w=w)
+        # import pdb
+       # pdb.set_trace()
+        feature_concat = self.concat_layer(feature_final)
+        # feature_concat = self.upsample(feature_concat)
+        return self.upsample(self.smooth_layer[-1](self.output_perform(feature_concat)))
+class upsample_block(nn.Module):
+    def __init__(self):
+        super(upsample_block,self).__init__()
+        self.upsample_factor = [1, 2, 4, 8]
+        # self.upsample_block=nn.ModuleList()
+        upsample_list = []
+        for factor in self.upsample_factor:
+            upsample_list.append(nn.Upsample(scale_factor=factor,mode='bilinear'))
+        self.upsample_block=nn.ModuleList(upsample_list)
+    def forward(self,feature):
+        bs,c,l,_=feature[0].shape
+        w = int(l**0.5)
+        feature_shape = [w,w//2,w//4,w//8]
+        for index in range(0,len(feature)):
+            feature[index] = feature[index].reshape(bs,c,feature_shape[index],-1)
+          # if index >=1:
+            feature[index] = self.upsample_block[index](feature[index])
+            # print(feature[index].shape)
+        return torch.cat(feature,dim=1)
 
    
 class ResBlock(nn.Module):

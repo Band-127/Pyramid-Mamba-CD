@@ -28,6 +28,7 @@ def one_hot_encoding(image, num_classes=8):
 
 class ChangeDetectionDatset(Dataset):
     def __init__(self, dataset_path, data_list, crop_size, max_iters=None, type='train', data_loader=img_loader):
+        print(dataset_path)
         self.dataset_path = dataset_path
         self.data_list = data_list
         self.loader = data_loader
@@ -45,7 +46,7 @@ class ChangeDetectionDatset(Dataset):
             pre_img, post_img, label = imutils.random_fliplr(pre_img, post_img, label)
             pre_img, post_img, label = imutils.random_flipud(pre_img, post_img, label)
             pre_img, post_img, label = imutils.random_rot(pre_img, post_img, label)
-
+    
         pre_img = imutils.normalize_img(pre_img)  # imagenet normalization
         pre_img = np.transpose(pre_img, (2, 0, 1))
 
@@ -55,11 +56,6 @@ class ChangeDetectionDatset(Dataset):
         return pre_img, post_img, label
 
     def __getitem__(self, index):
-        # print(self.dataset_path)
-        if 'train' in self.data_pro_type:
-            self.dataset_path='/home/majiancong/data/LEVIR-CD/train'
-        else:
-            self.dataset_path='/home/majiancong/data/LEVIR-CD/test'
         pre_path = os.path.join(self.dataset_path, 'A', self.data_list[index])
         post_path = os.path.join(self.dataset_path,'B', self.data_list[index])
         label_path = os.path.join(self.dataset_path, 'label', self.data_list[index])
@@ -68,7 +64,7 @@ class ChangeDetectionDatset(Dataset):
         label = self.loader(label_path)
         label = label / 255
 
-        if 'train' in self.data_pro_type:
+        if 'train'  in self.data_pro_type:
             pre_img, post_img, label = self.__transforms(True, pre_img, post_img, label)
         else:
             pre_img, post_img, label = self.__transforms(False, pre_img, post_img, label)
