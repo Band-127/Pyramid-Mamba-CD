@@ -8,11 +8,14 @@ import einops
 class ChangeDecoder(nn.Module):
     def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, **kwargs):
         super(ChangeDecoder, self).__init__()
-        self.embeding_dim=[encoder_dims[i] for i in range(len(encoder_dims))]
+        
+        self.embeding_dim=[2*encoder_dims[i] for i in range(len(encoder_dims))]
+        encoder_dims = [encoder_dims[i]*2 for i in range(len(encoder_dims))]
         # self.embeding_dim.append(self.embeding_dim[-1]*2)
         # encoder_dims.append(self.embeding_dim[-1]*2)
         # encoder_dims.append(encoder_dims[-1]*2)
-        
+        # import pdb
+        # pdb.set_trace()
         self.shape=[64,32,16,8]
         # 96 192 384 768
         self.conv_list = []
@@ -33,31 +36,33 @@ class ChangeDecoder(nn.Module):
             convnet.to('cuda')
         self.lvl_embed = nn.Parameter(torch.rand(4,1,encoder_dims[1]))
         # 4 192
-        self.depth = 8
-        self.model_list=[nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity())]
-        self.model_list.append(nn.Sequential(
-            nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
-            Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-            VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-            ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-            ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-            forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-            gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity()))
+        self.depth = 4
+        self.model_list=[]
+        # self.model_list=[nn.Sequential(
+        #     nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
+        #     Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
+        #     VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+        #     ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+        #     ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+        #     forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+        #     gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+        #     ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+        #     ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+        #     forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+        #     gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity())]
+        for _ in range(self.depth):
+            self.model_list.append(nn.Sequential(
+                nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
+                Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
+                VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
+                ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
+                forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
+                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity()))
         self.vss = nn.ModuleList(self.model_list)
         self.upsample = nn.Upsample(scale_factor=2,mode='bilinear')
         self.concat_layer=upsample_block()
@@ -131,7 +136,7 @@ class ChangeDecoder(nn.Module):
         # pre_feat_1, pre_feat_2, pre_feat_3, pre_feat_4 = features_mapper
         for blk_index in range(len(self.vss)):
             features_mapper = self.batch_split_and_smooth(self.vss[blk_index](features_mapper),name='mid',w=w,index=blk_index)
-        feature_final = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index,w=w)
+        feature_final = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index+1,w=w)
         # import pdb
        # pdb.set_trace()
         feature_concat = self.concat_layer(feature_final)
@@ -140,7 +145,7 @@ class ChangeDecoder(nn.Module):
 class upsample_block(nn.Module):
     def __init__(self):
         super(upsample_block,self).__init__()
-        self.upsample_factor = [1, 2, 4, 8]
+        self.upsample_factor = [2, 4, 8,16]
         # self.upsample_block=nn.ModuleList()
         upsample_list = []
         for factor in self.upsample_factor:

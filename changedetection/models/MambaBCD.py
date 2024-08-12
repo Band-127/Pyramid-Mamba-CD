@@ -56,7 +56,7 @@ class STMambaBCD(nn.Module):
         #     use_3x3=True,
         #     **clean_kwargs
         # )
-        self.decoder1 = ChangeDecoder(
+        self.decoder = ChangeDecoder(
             encoder_dims=self.encoder.dims,
             channel_first=self.encoder.channel_first,
             norm_layer=norm_layer,
@@ -65,15 +65,15 @@ class STMambaBCD(nn.Module):
             use_3x3=True,
             **clean_kwargs
         )
-        self.decoder2 = ChangeDecoder(
-            encoder_dims=self.encoder.dims,
-            channel_first=self.encoder.channel_first,
-            norm_layer=norm_layer,
-            ssm_act_layer=ssm_act_layer,
-            mlp_act_layer=mlp_act_layer,
-            use_3x3=True,
-            **clean_kwargs
-        )
+        # self.decoder2 = ChangeDecoder(
+        #     encoder_dims=self.encoder.dims,
+        #     channel_first=self.encoder.channel_first,
+        #     norm_layer=norm_layer,
+        #     ssm_act_layer=ssm_act_layer
+        #     mlp_act_layer=mlp_act_layer,
+        #     use_3x3=True,
+        #     **clean_kwargs
+        # )
 
         self.main_clf = nn.Conv2d(in_channels=384, out_channels=2, kernel_size=1)
 
@@ -86,16 +86,21 @@ class STMambaBCD(nn.Module):
         # print(pre_data.shape)
         pre_features = self.encoder(pre_data)
         post_features = self.encoder(post_data)
-        # feature = torch.cat([pre_data,post_data],dim=2)
+        # feature = torch.cat([pre_features,post_features],dim=2)
+        feature = []
+        for index in range(len(pre_features)):
+            feature.append(torch.cat([pre_features[index],post_features[index]],dim=1))
+        # output = self.decoder()
         # feature = self.encoder(feature)
-        output1,output2 = self.decoder1(pre_features),self.decoder2(post_features)
+        # output1,output2 = self.decoder(pre_features),self.decoder2(post_features)
         # import pdb
         # pdb.set_trace()
         # output = self.decoder(feature,feature)
         # pre_features,post_features= channel_exchange(pre_features,post_features)
         # Decoder processing - passing encoder outputs to the decoder
         # output = torch.add(self.decoder(pre_features,post_features),output)
-        output = torch.cat([output1,output2],dim=1)
+        # output = torch.cat([output1,output2],dim=1)
+        output = self.decoder(feature)
         output = self.main_clf(output)
         output = F.interpolate(output, size=pre_data.size()[-2:], mode='bilinear')
         return output
