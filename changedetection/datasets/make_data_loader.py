@@ -6,7 +6,7 @@ import numpy as np
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
-
+from PIL import Image
 import MambaCD.changedetection.datasets.imutils as imutils
 
 
@@ -27,8 +27,9 @@ def one_hot_encoding(image, num_classes=8):
 
 
 class ChangeDetectionDatset(Dataset):
-    def __init__(self, dataset_path, data_list, crop_size, max_iters=None, type='train', data_loader=img_loader):
-        print(dataset_path)
+    def __init__(self, dataset_name,dataset_path, data_list, crop_size, max_iters=None, type='train', data_loader=img_loader):
+        # print(dataset_path)
+        self.dataset_name = dataset_name
         self.dataset_path = dataset_path
         self.data_list = data_list
         self.loader = data_loader
@@ -41,7 +42,12 @@ class ChangeDetectionDatset(Dataset):
         self.crop_size = crop_size
 
     def __transforms(self, aug, pre_img, post_img, label):
+        # print(label.shape)
         if aug:
+            if self.dataset_name == "DSIFN-CD":
+                label = Image.fromarray(label)
+                label = label.resize((pre_img.shape[0], pre_img.shape[1]))
+                label = np.array(label)
             pre_img, post_img, label = imutils.random_crop_new(pre_img, post_img, label, self.crop_size)
             pre_img, post_img, label = imutils.random_fliplr(pre_img, post_img, label)
             pre_img, post_img, label = imutils.random_flipud(pre_img, post_img, label)
@@ -56,13 +62,27 @@ class ChangeDetectionDatset(Dataset):
         return pre_img, post_img, label
 
     def __getitem__(self, index):
-        pre_path = os.path.join(self.dataset_path, 'A', self.data_list[index])
-        post_path = os.path.join(self.dataset_path,'B', self.data_list[index])
-        label_path = os.path.join(self.dataset_path, 'label', self.data_list[index])
+        if self.dataset_name=='LEVIR-CD' or self.dataset_name == 'LEVIR-CD+':
+            pre_path = os.path.join(self.dataset_path, 'A', self.data_list[index])
+            post_path = os.path.join(self.dataset_path,'B', self.data_list[index])
+            label_path = os.path.join(self.dataset_path, 'label', self.data_list[index])
+        if self.dataset_name == 'DSIFN-CD':
+            pre_path = os.path.join(self.dataset_path, 't1', self.data_list[index])
+            post_path = os.path.join(self.dataset_path,'t2', self.data_list[index])
+            if self.type=='train':
+                label_path = os.path.join(self.dataset_path, 'm/m', self.data_list[index].split('.')[0]+'.png')
+            else:
+                label_path = os.path.join(self.dataset_path, 'mask', self.data_list[index].split('.')[0]+'.tif')
         pre_img = self.loader(pre_path)
         post_img = self.loader(post_path)
         label = self.loader(label_path)
-        label = label / 255
+        if self.dataset_name != "DSIFN-CD":
+            label = label / 255
+        else:
+            if self.type == 'train':
+                label = label / 255
+            else:
+                pass
 
         if 'train'  in self.data_pro_type:
             pre_img, post_img, label = self.__transforms(True, pre_img, post_img, label)
@@ -208,8 +228,8 @@ class DamageAssessmentDatset(Dataset):
 
 
 def make_data_loader(args, **kwargs):  # **kwargs could be omitted
-    if 'SYSU' in args.dataset or 'LEVIR-CD+' in args.dataset or 'WHU' in args.dataset or 'LEVIR-CD' in args.dataset:
-        dataset = ChangeDetectionDatset(args.train_dataset_path, args.train_data_name_list, args.crop_size, args.max_iters, args.type)
+    if 'SYSU' in args.dataset or 'LEVIR-CD+' in args.dataset or 'WHU' in args.dataset or 'LEVIR-CD' in args.dataset or 'DSIFN-CD' in args.dataset:
+        dataset = ChangeDetectionDatset(args.dataset,args.train_dataset_path, args.train_data_name_list, args.crop_size, args.max_iters, args.type)
         # train_sampler = DistributedSampler(dataset, shuffle=True)
         data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=args.shuffle, **kwargs, num_workers=16,
                                  drop_last=False)

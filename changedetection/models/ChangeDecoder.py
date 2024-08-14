@@ -38,18 +38,6 @@ class ChangeDecoder(nn.Module):
         # 4 192
         self.depth = 4
         self.model_list=[]
-        # self.model_list=[nn.Sequential(
-        #     nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
-        #     Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-        #     VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-        #     ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-        #     ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-        #     forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-        #     gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
-        #     ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
-        #     ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
-        #     forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-        #     gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),Permute(0, 3, 1, 2) if not channel_first else nn.Identity())]
         for _ in range(self.depth):
             self.model_list.append(nn.Sequential(
                 nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
@@ -68,7 +56,7 @@ class ChangeDecoder(nn.Module):
         self.concat_layer=upsample_block()
         self.smooth_layer = [ResBlock(in_channels=encoder_dims[1], out_channels=encoder_dims[1], stride=1).to('cuda') for _ in range(self.depth+1)]
         self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * encoder_dims[1],out_channels = encoder_dims[1])
-        self.apply(self.parameter_init)
+        # self.apply(self.parameter_init)
 
     def align_and_cat(self,pre_level_f):
         bs,c,w,h=pre_level_f.shape

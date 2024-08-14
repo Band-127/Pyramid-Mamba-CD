@@ -115,7 +115,7 @@ class Trainer(object):
             self.optim.step()
             if (itera + 1) % 10 == 0:
                 print(f'iter is {itera + 1}, overall loss is {final_loss}')
-                if (itera + 1) % 500 == 0:
+                if (itera + 1) % 10 == 0:
                     self.deep_model.eval()
                     rec, pre, oa, f1_score, iou, kc = self.validation()
                     if kc > best_kc:
@@ -131,7 +131,7 @@ class Trainer(object):
     def validation(self):
         print('---------starting evaluation-----------')
         self.evaluator.reset()
-        dataset = ChangeDetectionDatset(self.args.test_dataset_path, self.args.test_data_name_list, 256, None, 'test')
+        dataset = ChangeDetectionDatset(self.args.dataset,self.args.test_dataset_path, self.args.test_data_name_list, 256, None, 'test')
         val_data_loader = DataLoader(dataset, batch_size=1, num_workers=4, drop_last=False)
         torch.cuda.empty_cache()
         
@@ -160,7 +160,7 @@ class Trainer(object):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Training on SYSU/LEVIR-CD+/LEVIR-CD/WHU-CD dataset")
+    parser = argparse.ArgumentParser(description="Training on SYSU/LEVIR-CD+/LEVIR-CD/WHU-CD/DSIFN-CD dataset")
     parser.add_argument('--cfg', type=str, default='/home/songjian/project/MambaCD/VMamba/classification/configs/vssm1/vssm_base_224.yaml')
     parser.add_argument(
         "--opts",
@@ -197,7 +197,9 @@ def main():
         args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'A'))
         args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'A'))
    
-
+    if args.dataset=='DSIFN-CD':
+        args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'t1'))
+        args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'t1'))
     trainer = Trainer(args)
     trainer.training()
 
