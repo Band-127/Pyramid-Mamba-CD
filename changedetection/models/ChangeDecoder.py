@@ -15,38 +15,38 @@ class ChangeDecoder(nn.Module):
         # encoder_dims.append(self.embeding_dim[-1]*2)
         # encoder_dims.append(encoder_dims[-1]*2)
         # import pdb
-        # pdb.set_trace()
+       # pdb.set_trace()
         self.shape=[64,32,16,8]
         # 96 192 384 768
         self.conv_list = []
         for i in range(1,len(self.embeding_dim)):
             if not use_3x3:
-                self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
-                                                nn.GroupNorm(32,encoder_dims[1])))
+                self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
+                                                nn.GroupNorm(32,encoder_dims[0])))
             else:
                 if i == len(self.embeding_dim)-1:
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
-                                                nn.GroupNorm(32,encoder_dims[1])))
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(encoder_dims[i], encoder_dims[1], kernel_size=3, stride=2, padding=1),  # 3x3conv s=2 -> 256channel
-                    nn.GroupNorm(32, encoder_dims[1])))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
+                                                nn.GroupNorm(32,encoder_dims[0])))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(encoder_dims[i], encoder_dims[0], kernel_size=3, stride=2, padding=1),  # 3x3conv s=2 -> 256channel
+                    nn.GroupNorm(32, encoder_dims[0])))
                 else:
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[1]),
-                                              nn.GroupNorm(32,encoder_dims[1])))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
+                                              nn.GroupNorm(32,encoder_dims[0])))
         for convnet in self.conv_list:
             convnet.to('cuda')
-        self.lvl_embed = nn.Parameter(torch.rand(4,1,encoder_dims[1]))
+        self.lvl_embed = nn.Parameter(torch.rand(4,1,encoder_dims[0]))
         # 4 192
-        self.depth = 4
+        self.depth = 8
         self.model_list=[]
         for _ in range(self.depth):
             self.model_list.append(nn.Sequential(
-                nn.Conv2d(kernel_size=1, in_channels=encoder_dims[1], out_channels=encoder_dims[1]),
+                nn.Conv2d(kernel_size=1, in_channels=encoder_dims[0], out_channels=encoder_dims[0]),
                 Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-                VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                VSSBlock(hidden_dim=encoder_dims[0], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
                 ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
                 ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
                 forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[1], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[0], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
                 ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
                 ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
                 forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
@@ -54,8 +54,8 @@ class ChangeDecoder(nn.Module):
         self.vss = nn.ModuleList(self.model_list)
         self.upsample = nn.Upsample(scale_factor=2,mode='bilinear')
         self.concat_layer=upsample_block()
-        self.smooth_layer = [ResBlock(in_channels=encoder_dims[1], out_channels=encoder_dims[1], stride=1).to('cuda') for _ in range(self.depth+1)]
-        self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * encoder_dims[1],out_channels = encoder_dims[1])
+        self.smooth_layer = [ResBlock(in_channels=encoder_dims[0], out_channels=encoder_dims[0], stride=1).to('cuda') for _ in range(self.depth+1)]
+        self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * encoder_dims[0],out_channels = encoder_dims[0])
         # self.apply(self.parameter_init)
 
     def align_and_cat(self,pre_level_f):
@@ -64,7 +64,7 @@ class ChangeDecoder(nn.Module):
         return pre_level
     
     def channel_mapper_and_cat(self,feature):
-        bs,c, __ , __ = feature[1].shape
+        bs,c, __ , __ = feature[0].shape
         # print(feature[0].shape)
         output=[]
         # feature[0]=feature[0].reshape(bs,c,-1)
@@ -113,9 +113,11 @@ class ChangeDecoder(nn.Module):
             nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
 
     def forward(self, features):
+        # features[0] = None
         bs,c,w,h  = features[1].shape
         # w1,w2,w3,w4 = w,w//2,w//4,w//8
         features_mapper = self.channel_mapper_and_cat(features)
+        del features
         # print(features.shape)
         # import pdb
         # pdb.set_trace()
@@ -124,16 +126,16 @@ class ChangeDecoder(nn.Module):
         # pre_feat_1, pre_feat_2, pre_feat_3, pre_feat_4 = features_mapper
         for blk_index in range(len(self.vss)):
             features_mapper = self.batch_split_and_smooth(self.vss[blk_index](features_mapper),name='mid',w=w,index=blk_index)
-        feature_final = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index+1,w=w)
+        feature_mapper = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index+1,w=w)
         # import pdb
        # pdb.set_trace()
-        feature_concat = self.concat_layer(feature_final)
+        feature_mapper = self.concat_layer(feature_mapper)
         # feature_concat = self.upsample(feature_concat)
-        return self.upsample(self.smooth_layer[-1](self.output_perform(feature_concat)))
+        return self.upsample(self.smooth_layer[-1](self.output_perform(feature_mapper)))
 class upsample_block(nn.Module):
     def __init__(self):
         super(upsample_block,self).__init__()
-        self.upsample_factor = [2, 4, 8,16]
+        self.upsample_factor = [1,2, 4, 8]
         # self.upsample_block=nn.ModuleList()
         upsample_list = []
         for factor in self.upsample_factor:

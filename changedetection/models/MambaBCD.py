@@ -56,6 +56,7 @@ class STMambaBCD(nn.Module):
         #     use_3x3=True,
         #     **clean_kwargs
         # )
+        # print(self.encoder.dims)
         self.decoder = ChangeDecoder(
             encoder_dims=self.encoder.dims,
             channel_first=self.encoder.channel_first,
@@ -75,7 +76,7 @@ class STMambaBCD(nn.Module):
         #     **clean_kwargs
         # )
 
-        self.main_clf = nn.Conv2d(in_channels=384, out_channels=2, kernel_size=1)
+        self.main_clf = nn.Conv2d(in_channels=self.encoder.dims[0]*2, out_channels=2, kernel_size=1)
 
     def _upsample_add(self, x, y):
         _, _, H, W = y.size()
