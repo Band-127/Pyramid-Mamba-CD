@@ -38,10 +38,6 @@ detection/work_dirs
 segmentation/data
 segmentation/work_dirs
 
-
-
-
-
 classification/models/ss2d_ablations.py
 kernels/selective_scan/1.log
 classification/dev.py
