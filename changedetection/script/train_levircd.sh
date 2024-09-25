@@ -1,10 +1,11 @@
 python script/train_MambaBCD.py --dataset 'LEVIR-CD' \
                                 --batch_size 8 \
                                 --crop_size 256 \
-                                --max_iters 800000 \
-                                --model_type baseline_base_levir \
+                                --max_iters 1600000 \
+                                --model_type baseline_tiny_levir_drop=0.2 \
                                 --model_param_path 'changedetection/saved_models' \
                                 --train_dataset_path '/home/majiancong/data/LEVIR-CD/train' \
                                 --test_dataset_path '/home/majiancong/data/LEVIR-CD/test' \
-                                --cfg '/home/majiancong/MambaCD/changedetection/configs/vssm1/vssm_small_224.yaml' \
-                                --pretrained_weight_path '/home/majiancong/MambaCD/changedetection/vssm_small_0229_ckpt_epoch_222.pth' \
+                                --drop_rate 0.2 \
+                                --cfg '/home/majiancong/MambaCD/changedetection/configs/vssm1/vssm_base_224.yaml' \
+                                --pretrained_weight_path '/home/majiancong/MambaCD/changedetection/vssm_base_0229_ckpt_epoch_237.pth' \

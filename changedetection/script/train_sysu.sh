@@ -1,0 +1,11 @@
+python script/train_MambaBCD.py --dataset 'SYSU' \
+                                --batch_size 8 \
+                                --crop_size 256 \
+                                --max_iters 800000 \
+                                --model_type baseline_base_sysu_sc_now_adjchannel=128 \
+                                --model_param_path 'changedetection/saved_models' \
+                                --train_dataset_path '/home/majiancong/data/SYSU/train' \
+                                --test_dataset_path '/home/majiancong/data/SYSU/test' \
+                                --cfg '/home/majiancong/MambaCD/changedetection/configs/vssm1/vssm_base_224.yaml' \
+                                --drop_rate 0.1 \
+                                --pretrained_weight_path '/home/majiancong/MambaCD/changedetection/vssm_base_0229_ckpt_epoch_237.pth' \

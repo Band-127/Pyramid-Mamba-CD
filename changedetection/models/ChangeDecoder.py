@@ -6,7 +6,7 @@ import einops
 
 
 class ChangeDecoder(nn.Module):
-    def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, **kwargs):
+    def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, drop_rate=0.2 , **kwargs):
         super(ChangeDecoder, self).__init__()
         
         self.embeding_dim=[2*encoder_dims[i] for i in range(len(encoder_dims))]
@@ -16,37 +16,39 @@ class ChangeDecoder(nn.Module):
         # encoder_dims.append(encoder_dims[-1]*2)
         # import pdb
        # pdb.set_trace()
+        # self.drop = nn.Dropout(p=0.3)
         self.shape=[64,32,16,8]
         # 96 192 384 768
-        self.conv_list = []
+        self.conv_list = nn.ModuleList([])
+        # import pdb
+        # pdb.set_trace()
         for i in range(1,len(self.embeding_dim)):
             if not use_3x3:
-                self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
-                                                nn.GroupNorm(32,encoder_dims[0])))
+                self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = 256),
+                                                nn.GroupNorm(32,256)))
             else:
                 if i == len(self.embeding_dim)-1:
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
-                                                nn.GroupNorm(32,encoder_dims[0])))
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(encoder_dims[i], encoder_dims[0], kernel_size=3, stride=2, padding=1),  # 3x3conv s=2 -> 256channel
-                    nn.GroupNorm(32, encoder_dims[0])))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = 256),
+                                                nn.GroupNorm(32,256)))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(encoder_dims[i], 256, kernel_size=3, stride=2, padding=1),  # 3x3conv s=2 -> 256channel
+                    nn.GroupNorm(32, 256)))
                 else:
-                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = encoder_dims[0]),
-                                              nn.GroupNorm(32,encoder_dims[0])))
-        for convnet in self.conv_list:
-            convnet.to('cuda')
-        self.lvl_embed = nn.Parameter(torch.rand(4,1,encoder_dims[0]))
+                    self.conv_list.append(nn.Sequential(nn.Conv2d(kernel_size=1, in_channels = encoder_dims[i], out_channels = 256),
+                                              nn.GroupNorm(32,256)))
+        self.lvl_embed = nn.Parameter(torch.rand(4,1,256))
         # 4 192
-        self.depth = 8
+        self.depth = 4
+        self.drop_rate = drop_rate
         self.model_list=[]
         for _ in range(self.depth):
             self.model_list.append(nn.Sequential(
-                nn.Conv2d(kernel_size=1, in_channels=encoder_dims[0], out_channels=encoder_dims[0]),
+                nn.Conv2d(kernel_size=1, in_channels=256, out_channels=256),
                 Permute(0, 2, 3, 1) if not channel_first else nn.Identity(),
-                VSSBlock(hidden_dim=encoder_dims[0], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                VSSBlock(hidden_dim=256, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
                 ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
                 ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
                 forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
-                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=encoder_dims[0], drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
+                gmlp=kwargs['gmlp'], use_checkpoint=kwargs['use_checkpoint']),VSSBlock(hidden_dim=256, drop_path=0.1, norm_layer=norm_layer, channel_first=channel_first,
                 ssm_d_state=kwargs['ssm_d_state'], ssm_ratio=kwargs['ssm_ratio'], ssm_dt_rank=kwargs['ssm_dt_rank'], ssm_act_layer=ssm_act_layer,
                 ssm_conv=kwargs['ssm_conv'], ssm_conv_bias=kwargs['ssm_conv_bias'], ssm_drop_rate=kwargs['ssm_drop_rate'], ssm_init=kwargs['ssm_init'],
                 forward_type=kwargs['forward_type'], mlp_ratio=kwargs['mlp_ratio'], mlp_act_layer=mlp_act_layer, mlp_drop_rate=kwargs['mlp_drop_rate'],
@@ -54,9 +56,12 @@ class ChangeDecoder(nn.Module):
         self.vss = nn.ModuleList(self.model_list)
         self.upsample = nn.Upsample(scale_factor=2,mode='bilinear')
         self.concat_layer=upsample_block()
-        self.smooth_layer = [ResBlock(in_channels=encoder_dims[0], out_channels=encoder_dims[0], stride=1).to('cuda') for _ in range(self.depth+1)]
-        self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * encoder_dims[0],out_channels = encoder_dims[0])
-        # self.apply(self.parameter_init)
+        self.smooth_layer = nn.ModuleList([ResBlock(in_channels=256, out_channels=256, drop_rate = self.drop_rate,stride=1) for _ in range(self.depth+1)])
+        self.output_perform = nn.Conv2d(kernel_size=1,in_channels= 4 * 256,out_channels = 256)
+        self.apply(self.parameter_init)
+        self.ds =nn.ModuleList([])
+        for _ in range(self.depth-1):
+            self.ds.append(nn.Conv2d(kernel_size=1,in_channels= 4 * 256,out_channels = 256))
 
     def align_and_cat(self,pre_level_f):
         bs,c,w,h=pre_level_f.shape
@@ -65,6 +70,7 @@ class ChangeDecoder(nn.Module):
     
     def channel_mapper_and_cat(self,feature):
         bs,c, __ , __ = feature[0].shape
+        c=256
         # print(feature[0].shape)
         output=[]
         # feature[0]=feature[0].reshape(bs,c,-1)
@@ -99,11 +105,16 @@ class ChangeDecoder(nn.Module):
         # import pdb
         # pdb.set_trace()
         feature_3 = self.smooth_layer[index](feature_3.reshape(bs,c,shape_list[3],-1))
+        feature_mid = [feature_0,feature_1,feature_2,feature_3]
+        # print(index)
+        blk_index= index
         if name=='mid':
             feature = [feature_0,feature_1,feature_2,feature_3]
             for index in range(len(feature)):
                 feature[index] = feature[index].reshape(bs,c,1,-1)
-            return torch.cat(feature,dim=-1)
+                # import pdb
+                # pdb.set_trace()
+            return torch.cat(feature,dim=-1),feature_mid
         else:
             return [feature_0,feature_1,feature_2,feature_3]
     
@@ -122,16 +133,23 @@ class ChangeDecoder(nn.Module):
         # import pdb
         # pdb.set_trace()
         features_mapper = features_mapper.unsqueeze(-2)
-        
+        feature_ds = []
         # pre_feat_1, pre_feat_2, pre_feat_3, pre_feat_4 = features_mapper
         for blk_index in range(len(self.vss)):
-            features_mapper = self.batch_split_and_smooth(self.vss[blk_index](features_mapper),name='mid',w=w,index=blk_index)
+            # print(len(self.vss))
+            features_mapper,feature_dsup = self.batch_split_and_smooth(self.vss[blk_index](features_mapper),name='mid',w=w,index=blk_index)
+            if blk_index!=len(self.vss)-1:
+                feature_dsup =  self.upsample(self.ds[blk_index](self.concat_layer(feature_dsup)))
+                # import pdb
+                # pdb.set_trace()
+                feature_ds.append(feature_dsup)
+            
         feature_mapper = self.batch_split_and_smooth(features_mapper,name='last',index=blk_index+1,w=w)
         # import pdb
        # pdb.set_trace()
         feature_mapper = self.concat_layer(feature_mapper)
         # feature_concat = self.upsample(feature_concat)
-        return self.upsample(self.smooth_layer[-1](self.output_perform(feature_mapper)))
+        return self.upsample(self.smooth_layer[-1](self.output_perform(feature_mapper))),feature_ds
 class upsample_block(nn.Module):
     def __init__(self):
         super(upsample_block,self).__init__()
@@ -154,10 +172,11 @@ class upsample_block(nn.Module):
 
    
 class ResBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+    def __init__(self, in_channels, out_channels, drop_rate, stride=1, downsample=None):
         super(ResBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
+        self.drop = nn.Dropout(p=drop_rate)
         self.relu = nn.ReLU(inplace=True)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -170,7 +189,7 @@ class ResBlock(nn.Module):
         out = self.bn1(out)
         out = self.relu(out)
 
-        out = self.conv2(out)
+        out = self.drop(self.conv2(out))
         out = self.bn2(out)
 
         if self.downsample is not None:

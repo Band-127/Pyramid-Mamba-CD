@@ -3,7 +3,12 @@ from MambaCD.classification.models.vmamba import VSSM, LayerNorm2d
 import torch
 import torch.nn as nn
 
-
+class Backbone_ResNet(nn.Module):
+    def __init__(self, out_indices=(0, 1, 2, 3), pretrained=None, norm_layer='ln2d', **kwargs):
+        self.out_indices = out_indices
+        
+    def forward(self,x):
+        pass
 class Backbone_VSSM(VSSM):
     def __init__(self, out_indices=(0, 1, 2, 3), pretrained=None, norm_layer='ln2d', **kwargs):
         # norm_layer='ln'

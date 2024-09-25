@@ -17,7 +17,7 @@ ckpt
 analyze/show
 
 cross_selective_scan
-
+changedetection/logs
 classification/models/pscan.py
 changedetection/vssm_base_0229_ckpt_epoch_237.pth
 changedetection/vssm_small_0229_ckpt_epoch_222.pth
