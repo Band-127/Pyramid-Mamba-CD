@@ -105,33 +105,34 @@ class Inference(object):
                 # import pdb
                 # pdb.set_trace()
                 output_1 = output_1.data.cpu().numpy()
-                output_1 = np.transpose(np.argmax(output_1, axis=1),(1,2,0))
+                output_1 = np.argmax(output_1, axis=1)
                 # import pdb
                 # pdb.set_trace()
-                labels = np.transpose(labels.cpu().numpy(),(1,2,0))
-                pre_change_imgs = np.transpose(np.squeeze(pre_change_imgs.cpu().numpy(),axis=0),(1,2,0))
-                post_change_imgs = np.transpose(np.squeeze(post_change_imgs.cpu().numpy(),axis=0),(1,2,0))
+                labels = labels.cpu().numpy()
+                # pre_change_imgs = np.squeeze(pre_change_imgs.cpu().numpy(),axis=0),(1,2,0))
+                # post_change_imgs = np.transpose(np.squeeze(post_change_imgs.cpu().numpy(),axis=0),(1,2,0))
                 # import pdb
                 # pdb.set_trace()
                 
                 self.evaluator.add_batch(labels, output_1)
                 image_name = names[0][0:-4] + f'.png'
-                labels = np.repeat(labels,repeats=3,axis=2)
-                output_1 = np.repeat(output_1,repeats=3,axis=2)
-                test_maps = np.stack([pre_change_imgs,post_change_imgs,labels,output_1])
-                self.writer.add_images(tag=f'test{itera}',img_tensor=test_maps,dataformats='NHWC')
-                # binary_change_map = np.squeeze(output_1)
+                # labels = np.repeat(labels,repeats=3,axis=2)
+                # output_1 = np.repeat(output_1,repeats=3,axis=2)
+                # test_maps = np.stack([pre_change_imgs,post_change_imgs,labels,output_1])
+                # self.writer.add_images(tag=f'test{itera}',img_tensor=test_maps,dataformats='NHWC')
+                binary_change_map = np.squeeze(output_1)
                 
-                # if not if_visible:
-                #     binary_change_map[binary_change_map==1] = 255
-                #     imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), binary_change_map.astype(np.uint8))
-                # else:
-                #     minus_map = np.squeeze(labels - binary_change_map,axis=0)
-                #     output = np.zeros((minus_map.shape[0], minus_map.shape[1],3), dtype=np.float32)
-                #     output[minus_map==-1]=[0,255,0]
-                #     output[minus_map==1] = [255,0,0]
-                #     output[minus_map==0] = [0,0,0]
-                #     imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), output.astype(np.uint8))
+                if not if_visible:
+                    binary_change_map[binary_change_map==1] = 255
+                    imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), binary_change_map.astype(np.uint8))
+                else:
+                    minus_map = np.squeeze(labels - binary_change_map,axis=0)
+                    output = np.zeros((minus_map.shape[0], minus_map.shape[1],3), dtype=np.float32)
+                    output[minus_map==1]=[0,255,0]
+                    output[minus_map==-1] = [255,0,0]
+                    output[minus_map==0] = [0,0,0]
+                    output[(minus_map==0) & (binary_change_map==1)] = [255,255,255]
+                    imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), output.astype(np.uint8))
 
         f1_score = self.evaluator.Pixel_F1_score()
         oa = self.evaluator.Pixel_Accuracy()
@@ -175,7 +176,9 @@ def main():
     if args.dataset=='LEVIR-CD':
         # args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'A'))
         args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'A'))
-   
+    if args.dataset=='SYSU':
+        # args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'time1'))
+        args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'time1'))
     if args.dataset=='DSIFN-CD':
         # args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'t1'))
         args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'t1'))
@@ -185,7 +188,7 @@ def main():
             args.test_data_name_list = f_test.read().split('\n')[:-1]
             # print(args.test_data_name_list)
     infer = Inference(args)
-    infer.infer(if_visible=False)
+    infer.infer(if_visible=True)
 
 
 if __name__ == "__main__":

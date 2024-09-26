@@ -6,7 +6,7 @@ import einops
 
 
 class ChangeDecoder(nn.Module):
-    def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, drop_rate=0.2 , **kwargs):
+    def __init__(self, encoder_dims,channel_first, norm_layer, ssm_act_layer, mlp_act_layer, use_3x3, drop_rate=0.0 , **kwargs):
         super(ChangeDecoder, self).__init__()
         
         self.embeding_dim=[2*encoder_dims[i] for i in range(len(encoder_dims))]

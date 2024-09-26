@@ -2,7 +2,7 @@ python script/train_MambaBCD.py --dataset 'LEVIR-CD' \
                                 --batch_size 8 \
                                 --crop_size 256 \
                                 --max_iters 1600000 \
-                                --model_type baseline_tiny_levir_drop=0.2 \
+                                --model_type baseline_tiny_levir_drop=0 \
                                 --model_param_path 'changedetection/saved_models' \
                                 --train_dataset_path '/home/majiancong/data/LEVIR-CD/train' \
                                 --test_dataset_path '/home/majiancong/data/LEVIR-CD/test' \
