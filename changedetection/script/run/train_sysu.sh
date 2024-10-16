@@ -1,11 +1,11 @@
-python script/train_MambaBCD.py --dataset 'LEVIR-CD' \
+python script/train_MambaBCD.py --dataset 'SYSU' \
                                 --batch_size 8 \
                                 --crop_size 256 \
-                                --max_iters 1600000 \
-                                --model_type baseline_tiny_levir_drop=0 \
+                                --max_iters 400000 \
+                                --model_type baseline_base_sysu_baseline-res101-nods \
                                 --model_param_path 'changedetection/saved_models' \
-                                --train_dataset_path '/home/majiancong/data/LEVIR-CD/train' \
-                                --test_dataset_path '/home/majiancong/data/LEVIR-CD/test' \
-                                --drop_rate 0.2 \
+                                --train_dataset_path '/home/majiancong/data/SYSU/train' \
+                                --test_dataset_path '/home/majiancong/data/SYSU/test' \
                                 --cfg '/home/majiancong/MambaCD/changedetection/configs/vssm1/vssm_base_224.yaml' \
+                                --decoder_depths 4 \
                                 --pretrained_weight_path '/home/majiancong/MambaCD/changedetection/vssm_base_0229_ckpt_epoch_237.pth' \

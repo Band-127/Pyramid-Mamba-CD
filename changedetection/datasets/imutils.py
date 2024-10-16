@@ -176,7 +176,7 @@ def random_bi_image_crop(pre_img, object, crop_size, mean_rgb=[0, 0, 0], ignore_
 
 
 def random_crop_new(pre_img, post_img, label, crop_size, mean_rgb=[0, 0, 0], ignore_index=255):
-    h, w = label.shape
+    h, w  = label.shape
 
     H = max(crop_size, h)
     W = max(crop_size, w)
@@ -285,7 +285,7 @@ def random_crop_bda(pre_img, post_img, loc_label, clf_label, crop_size, mean_rgb
 
 
 def random_crop_mcd(pre_img, post_img, label_cd, label_1, label_2, crop_size, mean_rgb=[0, 0, 0], ignore_index=255):
-    h, w = label_1.shape
+    h, w= label_1.shape
 
     H = max(crop_size, h)
     W = max(crop_size, w)

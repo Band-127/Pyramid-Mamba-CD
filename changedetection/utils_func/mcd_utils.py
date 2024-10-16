@@ -206,6 +206,8 @@ def SCDD_eval_all(preds, labels, num_class):
     for pred, label in zip(preds, labels):
         infer_array = np.array(pred)
         unique_set = set(np.unique(infer_array))
+        # import pdb
+        # pdb.set_trace()
         assert unique_set.issubset(set([x for x in range(num_class)])), "unrecognized label number"
         label_array = np.array(label)
         assert infer_array.shape == label_array.shape, "The size of prediction and target must be the same"

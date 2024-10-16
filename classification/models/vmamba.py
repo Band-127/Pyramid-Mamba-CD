@@ -31,6 +31,8 @@ class CrossScan(torch.autograd.Function):
         xs[:, 0] = x.flatten(2, 3)
         xs[:, 1] = x.transpose(dim0=2, dim1=3).flatten(2, 3)
         xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
+        # import pdb
+        # pdb.set_trace()
         return xs
     
     @staticmethod
@@ -42,7 +44,28 @@ class CrossScan(torch.autograd.Function):
         y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
         return y.view(B, -1, H, W)
 
+class CrossScan_for_Seq(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor):
+        B, C, H, W = x.shape
+        ctx.shape = (B, C, H, W)
+        xs = x.new_empty((B, 2, C, H * W))
+        xs[:, 0] = x.flatten(2, 3)
 
+        xs[:, 1] = torch.flip(xs[:,0],dims=[-1])
+        # xs[:, 1] = torch.flip(xs[:, 0], dims=[-1])
+        # import pdb
+        # pdb.set_trace()
+        return xs
+    
+    @staticmethod
+    def backward(ctx, ys: torch.Tensor):
+        # out: (b, k, d, l)
+        B, C, H, W = ctx.shape
+        L = H * W
+        ys = ys[:, 0] + ys[:, 1].flip(dims=[-1]).view(B, 1, -1, L)
+        y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, -1, L)
+        return y.view(B, -1, H, W)
 class CrossMerge(torch.autograd.Function):
     @staticmethod
     def forward(ctx, ys: torch.Tensor):
@@ -65,7 +88,28 @@ class CrossMerge(torch.autograd.Function):
         xs[:, 2:4] = torch.flip(xs[:, 0:2], dims=[-1])
         xs = xs.view(B, 4, C, H, W)
         return xs
-
+class CrossMerge_for_Seq(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, ys: torch.Tensor):
+        B, K, D, H, W = ys.shape
+        ctx.shape = (H, W)
+        ys = ys.view(B, K, D, -1)
+        ys = ys[:, 0] + ys[:, 1].flip(dims=[-1]).view(B, 1, D, -1)
+        y = ys[:, 0] + ys[:, 1].view(B, -1, W, H).transpose(dim0=2, dim1=3).contiguous().view(B, D, -1)
+        return y
+    
+    @staticmethod
+    def backward(ctx, x: torch.Tensor):
+        # B, D, L = x.shape
+        # out: (b, k, d, l)
+        H, W = ctx.shape
+        B, C, L = x.shape
+        xs = x.new_empty((B, 2, C, L))
+        xs[:, 0] = x
+        # xs[:, 1] = x.view(B, C, H, W).transpose(dim0=2, dim1=3).flatten(2, 3)
+        xs[:, 1] = torch.flip(xs[:, 0], dims=[-1])
+        xs = xs.view(B, 2, C, H, W)
+        return xs
 
 # these are for ablations =============
 class CrossScan_Ab_2direction(torch.autograd.Function):
@@ -367,13 +411,14 @@ def cross_selective_scan(
             backnrows = 2
         else:
             backnrows = 1
-
+    
     def selective_scan(u, delta, A, B, C, D=None, delta_bias=None, delta_softplus=True):
         return SelectiveScan.apply(u, delta, A, B, C, D, delta_bias, delta_softplus, nrows, backnrows, ssoflex)
     
     if (not dt_low_rank):
         x_dbl = F.conv1d(x.view(B, -1, L), x_proj_weight.view(-1, D, 1), bias=(x_proj_bias.view(-1) if x_proj_bias is not None else None), groups=K)
         dts, Bs, Cs = torch.split(x_dbl.view(B, -1, L), [D, 4 * N, 4 * N], dim=1)
+        # dts, Bs, Cs = torch.split(x_dbl.view(B, -1, L), [D, 2 * N, 2 * N], dim=1)
         xs = CrossScan.apply(x)
         dts = CrossScan.apply(dts)
     elif no_einsum:
@@ -1410,7 +1455,7 @@ class VSSM(nn.Module):
 
         _ACTLAYERS = dict(
             silu=nn.SiLU, 
-            gelu=nn.GELU, 
+           gelu=nn.GELU, 
             relu=nn.ReLU, 
             sigmoid=nn.Sigmoid,
         )

@@ -1,11 +1,11 @@
-python script/train_MambaBCD.py --dataset 'DSIFN-CD' \
+python script/train_MambaBCD.py --dataset 'WHU-CD' \
                                 --batch_size 8 \
                                 --crop_size 256 \
                                 --max_iters 800000 \
-                                --model_type baseline_base_dsifn_kaiming_init_loss_dropout_valid-consine \
+                                --model_type baseline_base_whu-ds-lvl-2layer-101 \
                                 --model_param_path 'changedetection/saved_models' \
-                                --train_dataset_path '/home/majiancong/data/DSIFN-CD/train' \
-                                --test_dataset_path '/home/majiancong/data/DSIFN-CD/test' \
+                                --train_dataset_path '/home/majiancong/data/WHU-CD' \
+                                --test_dataset_path '/home/majiancong/data/WHU-CD' \
+                                --decoder_depths 4 \
                                 --cfg '/home/majiancong/MambaCD/changedetection/configs/vssm1/vssm_base_224.yaml' \
-                                --drop_rate 0.5 \
                                 --pretrained_weight_path '/home/majiancong/MambaCD/changedetection/vssm_base_0229_ckpt_epoch_237.pth' \

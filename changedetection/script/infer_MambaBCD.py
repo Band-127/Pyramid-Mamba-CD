@@ -10,14 +10,14 @@ import numpy as np
 from MambaCD.changedetection.configs.config import get_config
 from torch.utils.tensorboard import SummaryWriter
 import torch
-
+# from ptflops import 
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from MambaCD.changedetection.datasets.make_data_loader import ChangeDetectionDatset, make_data_loader
 from MambaCD.changedetection.utils_func.metrics import Evaluator
-from MambaCD.changedetection.models.MambaBCD import STMambaBCD
+from MambaCD.changedetection.models.MambaPyramid import MambaPyramid
 import imageio
 import MambaCD.changedetection.utils_func.lovasz_loss as L
 
@@ -28,12 +28,14 @@ class Inference(object):
 
         self.evaluator = Evaluator(num_class=2)
 
-        self.deep_model = STMambaBCD(
+        self.deep_model = MambaPyramid(
             pretrained=args.pretrained_weight_path,
+            # out_ch = 2,
             patch_size=config.MODEL.VSSM.PATCH_SIZE, 
             in_chans=config.MODEL.VSSM.IN_CHANS, 
             num_classes=config.MODEL.NUM_CLASSES, 
             depths=config.MODEL.VSSM.DEPTHS, 
+            decoder_depths = args.decoder_depths,
             dims=config.MODEL.VSSM.EMBED_DIM, 
             # ===================
             ssm_d_state=config.MODEL.VSSM.SSM_D_STATE,
@@ -64,11 +66,12 @@ class Inference(object):
         self.epoch = args.max_iters // args.batch_size
         self.writer = SummaryWriter(log_dir=f"./logs/{self.args.model_type}/test_dir")
         self.change_map_saved_path = os.path.join(args.result_saved_path, args.dataset, args.model_type, 'change_map')
-
+        self.heat_map_saved_path = os.path.join(args.result_saved_path, args.dataset, args.model_type, 'heat_map')
         if not os.path.exists(self.change_map_saved_path):
             os.makedirs(self.change_map_saved_path)
 
-        
+        if not os.path.exists(self.heat_map_saved_path):
+            os.makedirs(self.heat_map_saved_path)
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'".format(args.resume))
@@ -101,7 +104,7 @@ class Inference(object):
                 post_change_imgs = post_change_imgs.cuda().float()
                 labels = labels.cuda().long()
 
-                output_1,_ = self.deep_model(pre_change_imgs, post_change_imgs)
+                output_1, visual_map = self.deep_model(pre_change_imgs, post_change_imgs)
                 # import pdb
                 # pdb.set_trace()
                 output_1 = output_1.data.cpu().numpy()
@@ -122,10 +125,10 @@ class Inference(object):
                 # self.writer.add_images(tag=f'test{itera}',img_tensor=test_maps,dataformats='NHWC')
                 binary_change_map = np.squeeze(output_1)
                 
-                if not if_visible:
+                if if_visible == 'grey':
                     binary_change_map[binary_change_map==1] = 255
                     imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), binary_change_map.astype(np.uint8))
-                else:
+                if if_visible == 'diff':
                     minus_map = np.squeeze(labels - binary_change_map,axis=0)
                     output = np.zeros((minus_map.shape[0], minus_map.shape[1],3), dtype=np.float32)
                     output[minus_map==1]=[0,255,0]
@@ -133,7 +136,20 @@ class Inference(object):
                     output[minus_map==0] = [0,0,0]
                     output[(minus_map==0) & (binary_change_map==1)] = [255,255,255]
                     imageio.imwrite(os.path.join(self.change_map_saved_path, image_name), output.astype(np.uint8))
-
+                if if_visible == 'heatmap':
+                    try:
+                        import seaborn as sns
+                        import matplotlib.pyplot as plt
+                    except ModuleNotFoundError:
+                        print('please import the drawing package!')
+                    for h in range(len(visual_map)):
+                        visual_map[h] = np.squeeze(visual_map[h].cpu().numpy(),axis=0)
+                        # print(visual_map[h][0].shape)
+                        visual_map[h] = visual_map[h][0]
+                        plt.figure(figsize=(8, 6))
+                        sns.heatmap(visual_map[h],annot=True, cmap='coolwarm')
+                        plt.savefig(f'{self.heat_map_saved_path}/{names[0][0:-4]}_layer{h}.png',dpi =300)
+                        plt.close()
         f1_score = self.evaluator.Pixel_F1_score()
         oa = self.evaluator.Pixel_Accuracy()
         rec = self.evaluator.Pixel_Recall_Rate()
@@ -156,12 +172,14 @@ def main():
         nargs='+',
     )
     parser.add_argument('--pretrained_weight_path', type=str)
-    parser.add_argument('--dataset', type=str, default='LEVIR-CD+')
-    parser.add_argument('--test_dataset_path', type=str, default='/home/songjian/project/datasets/SYSU/test')
+    parser.add_argument('--dataset', type=str, default='WHU-CD')
+    parser.add_argument('--test_dataset_path', type=str, default='/home/majiancong/data/SYSU/test')
+    parser.add_argument('--decoder_depths', type=int, default=4)
     # parser.add_argument('--test_data_list_path', type=str, default='/home/songjian/project/datasets/SYSU/test_list.txt')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--crop_size', type=int, default=256)
     # parser.add_argument('--train_data_name_list', type=list)
+    parser.add_argument('--if_visible', type=str, default='gray')
     # parser.add_argument('--test_data_name_list', type=list)
     parser.add_argument('--start_iter', type=int, default=0)
     parser.add_argument('--cuda', type=bool, default=True)
@@ -173,7 +191,7 @@ def main():
 
     args = parser.parse_args()
 
-    if args.dataset=='LEVIR-CD':
+    if args.dataset=='LEVIR-CD' or args.dataset=='LEVIR-CD+' :
         # args.train_data_name_list = os.listdir(os.path.join(args.train_dataset_path,'A'))
         args.test_data_name_list = os.listdir(os.path.join(args.test_dataset_path,'A'))
     if args.dataset=='SYSU':
@@ -188,7 +206,7 @@ def main():
             args.test_data_name_list = f_test.read().split('\n')[:-1]
             # print(args.test_data_name_list)
     infer = Inference(args)
-    infer.infer(if_visible=True)
+    infer.infer(if_visible= args.if_visible)
 
 
 if __name__ == "__main__":
