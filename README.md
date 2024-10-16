@@ -67,7 +67,7 @@ You can find them in it. And please run it before your training and testing in c
 For the 4 datasets above, we provide bash scripts for them in *scripts* folder.
 ~~~bash
     cd changedetection
-    bash script/train_<dataset_name>.sh
+    bash script/run/train_<dataset_name>.sh
 ~~~
 Before you use them, please make sure that the data has been uploaded and the config path is correct.
 
@@ -76,7 +76,7 @@ Also, the evaluate the training process, you can see the matrics like train loss
 ## 3 Test your model
 It is easy for you to get the test result of your model. We  provide two forms, the binary change map and the RGB difference map. For the former, you only need to change the   *if_visible* hyperparameter to 'gray' so you can get it. The white region stands for changed region, while the black stands for unchanged region. If you set the param as 'diff', you'll get the RGB maps. The red region stands for mistakes, while the green stands for misses.
 ~~~bash
-    bash script/test_<dataset_name>.sh
+    bash script/run/test_<dataset_name>.sh
 ~~~
 
 The pre-trained model will be uploaded soon.
