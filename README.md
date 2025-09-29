@@ -5,7 +5,7 @@ Our code is modified on the basis of ChangeMamba.
 ## 1 Set up
 To start with, please follow the steps below:
 ~~~ bash
-git clone []
+git clone https://github.com/Band-127/Pyramid-Mamba-CD.git
 conda create -n mambapyramid
 cd MambaPyramid
 conda activate mambapyramid
@@ -82,3 +82,16 @@ It is easy for you to get the test result of your model. We  provide two forms, 
 The pre-trained model will be uploaded soon.
 
 If the repository is useful for you, please tick a star and refer it in your paper.
+```bash
+@ARTICLE{11090033,
+  author={Ma, Jiancong and Li, Bo and Li, Hanxi and Meng, Siying and Lu, Ruitao and Mei, Shaohui},
+  journal={IEEE Journal of Selected Topics in Applied Earth Observations and Remote Sensing}, 
+  title={Remote Sensing Change Detection by Pyramid Sequential Processing With Mamba}, 
+  year={2025},
+  volume={18},
+  number={},
+  pages={19481-19495},
+  keywords={Feature extraction;Transformers;Remote sensing;Biological system modeling;Convolutional neural networks;Computational modeling;Training;Computer architecture;Visualization;Deep learning;Change detection (CD);Mamba;multiscale;pyramid;state space model (SSM)},
+  doi={10.1109/JSTARS.2025.3591834}}
+
+```
