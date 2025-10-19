@@ -1,8 +1,9 @@
 # Mamba Pyramid：
-
-Our code is modified on the basis of ChangeMamba.
-
-## 1 Set up
+## 🚀 News
+The paper **Remote Sensing Change Detection by Pyramid Sequential Processing With Mamba** is accepted by JSTARS 2025!
+## 😃 Start up
+The repo is on the basis of the Changemamba.
+### 1 Set up
 To start with, please follow the steps below:
 ~~~ bash
 git clone https://github.com/Band-127/Pyramid-Mamba-CD.git
@@ -63,7 +64,7 @@ Note that the train/val/test sets in WHU-CD are splited by *gen_train_val_test.p
 You can find them in it. And please run it before your training and testing in case that raising error.
 
 
-## 2 Train your model
+### 2 Train your model
 For the 4 datasets above, we provide bash scripts for them in *scripts* folder.
 ~~~bash
     cd changedetection
@@ -73,13 +74,12 @@ Before you use them, please make sure that the data has been uploaded and the co
 
 Also, the evaluate the training process, you can see the matrics like train loss and corresponding metrics on Tensorboard.
 
-## 3 Test your model
+### 3 Test your model
 It is easy for you to get the test result of your model. We  provide two forms, the binary change map and the RGB difference map. For the former, you only need to change the   *if_visible* hyperparameter to 'gray' so you can get it. The white region stands for changed region, while the black stands for unchanged region. If you set the param as 'diff', you'll get the RGB maps. The red region stands for mistakes, while the green stands for misses.
 ~~~bash
     bash script/run/test_<dataset_name>.sh
 ~~~
-
-The pre-trained model will be uploaded soon.
+The pre-trained model will be uploaded soon. 
 
 If the repository is useful for you, please tick a star and refer it in your paper.
 ```bash
@@ -93,5 +93,4 @@ If the repository is useful for you, please tick a star and refer it in your pap
   pages={19481-19495},
   keywords={Feature extraction;Transformers;Remote sensing;Biological system modeling;Convolutional neural networks;Computational modeling;Training;Computer architecture;Visualization;Deep learning;Change detection (CD);Mamba;multiscale;pyramid;state space model (SSM)},
   doi={10.1109/JSTARS.2025.3591834}}
-
 ```
